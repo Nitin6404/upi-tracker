@@ -3,8 +3,21 @@ const { google } = require('googleapis');
 const dotenv = require('dotenv');
 const dayjs = require('dayjs');
 const creds = require('./credentials.json');
+const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
 
 dotenv.config();
+
+const LOG_FILE = path.join(__dirname, '.sms-log.json');
+let loggedHashes = [];
+
+if (fs.existsSync(LOG_FILE)) {
+  loggedHashes = JSON.parse(fs.readFileSync(LOG_FILE, 'utf8'));
+}
+
+const getHash = (text) => crypto.createHash('sha256').update(text).digest('hex');
+
 // Setup Google Sheets
 const auth = new google.auth.GoogleAuth({
   credentials: creds,
@@ -57,11 +70,17 @@ async function main() {
   const messages = JSON.parse(raw);
 
   for (const msg of messages) {
+    const hash = getHash(msg.body);
+    if (loggedHashes.includes(hash)) continue;
+  
     const parsed = parseSMS(msg.body);
     if (parsed) {
       await logToSheet(parsed);
+      loggedHashes.push(hash);
     }
   }
+  
+  fs.writeFileSync(LOG_FILE, JSON.stringify(loggedHashes, null, 2));
 }
 
 main();
