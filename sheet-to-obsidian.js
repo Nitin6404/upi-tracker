@@ -34,11 +34,13 @@ async function fetchSheetData(authClient) {
   });
 
   const rows = res.data.values || [];
+  console.log(rows);
 
   // Only fetch today's transactions (date format: YYYY-MM-DD)
   const today = dayjs().format('YYYY-MM-DD');
-  const todayTransactions = rows.filter(([datetime]) => {
-    const rowDate = dayjs(datetime).format('YYYY-MM-DD');
+  console.log(`Filtering transactions for today: ${today}`);
+  const todayTransactions = rows.map(row => {
+    const rowDate = dayjs(row[2]).format('YYYY-MM-DD');
     return rowDate === today;
   });
 
@@ -75,7 +77,9 @@ async function saveToObsidian() {
   try {
     const auth = await authorize();
     const transactions = await fetchSheetData(auth);
+    console.log(`Fetched ${transactions.length} transactions for today.`);
     const markdown = toMarkdown(transactions);
+    console.log('Generated Markdown:\n', markdown);
 
     // Create or overwrite the file
     fs.mkdirSync(vaultPath, { recursive: true });
