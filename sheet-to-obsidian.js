@@ -37,7 +37,7 @@ async function fetchSheetData(authClient) {
 // 📝 Generate Markdown
 function toMarkdown(transactions) {
   let content = `# 💸 Expenses on ${dayjs().format('YYYY-MM-DD')}\n\n`;
-  transactions.forEach(([datetime, amount, type, purpose, ref]) => {
+  transactions.forEach(([type, amount, datetime, purpose, ref]) => {
     const time = dayjs(datetime).format('HH:mm');
     content += `- ${time} → ₹${amount} (${type}) — ${purpose}  \n`;
   });
@@ -50,7 +50,7 @@ async function saveToObsidian() {
     const auth = await authorize();
     const transactions = await fetchSheetData(auth);
     const markdown = toMarkdown(transactions);
-
+    
     fs.mkdirSync(vaultPath, { recursive: true });
     fs.writeFileSync(filePath, markdown);
 
