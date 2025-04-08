@@ -3,29 +3,61 @@
 const fs = require('fs');
 const path = require('path');
 const dayjs = require('dayjs');
+const { google } = require('googleapis');
+const dotenv = require('dotenv');
+dotenv.config();
 
-// 🔧 Configs (Change These)
-const vaultPath = '/data/data/com.termux/files/home/storage/documents/ObsidianVault/Expenses'; // Your Obsidian folder
+// 🔧 Configs
+const vaultPath = process.env.OBSIDIAN_VAULT_PATH; // Your Obsidian folder path
 const fileName = `${dayjs().format('YYYY-MM-DD')}.md`;
 const filePath = path.join(vaultPath, fileName);
 
-// 📦 Example Data (replace this with real Google Sheets data)
-const transactions = [
-  ['2025-04-08 09:55:15', '169.00', 'debit', 'Grocery Shopping', 'UPI:100322084813'],
-  ['2025-04-08 12:10:48', '385.00', 'credit', 'Refund from Friend', 'IMPS Ref 509812952351'],
-  ['2025-04-08 13:38:20', '60.00', 'debit', 'Tea & Snacks', 'UPI:546472063956']
-];
+const SHEET_ID = process.env.GOOGLE_SHEET_ID; // 🔁 Replace with your actual Google Sheet ID
+const SHEET_RANGE = 'Sheet1!A2:E';      // Adjust range if needed
 
-// 📄 Markdown Generator
-let content = `# 💸 Expenses on ${dayjs().format('YYYY-MM-DD')}\n\n`;
+// 🔐 Auth setup
+async function authorize() {
+  const auth = new google.auth.GoogleAuth({
+    keyFile: 'credentials.json',
+    scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
+  });
+  return await auth.getClient();
+}
 
-transactions.forEach(([datetime, amount, type, purpose, ref], i) => {
-  const time = dayjs(datetime).format('HH:mm');
-  content += `- ${time} → ₹${amount} (${type}) — ${purpose}  \n`;
-});
+// 📤 Fetch Data from Google Sheets
+async function fetchSheetData(authClient) {
+  const sheets = google.sheets({ version: 'v4', auth: authClient });
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId: SHEET_ID,
+    range: SHEET_RANGE,
+  });
+  return res.data.values || [];
+}
 
-// ✍️ Save to Vault
-fs.mkdirSync(vaultPath, { recursive: true }); // ensures folder exists
-fs.writeFileSync(filePath, content);
+// 📝 Generate Markdown
+function toMarkdown(transactions) {
+  let content = `# 💸 Expenses on ${dayjs().format('YYYY-MM-DD')}\n\n`;
+  transactions.forEach(([datetime, amount, type, purpose, ref]) => {
+    const time = dayjs(datetime).format('HH:mm');
+    content += `- ${time} → ₹${amount} (${type}) — ${purpose}  \n`;
+  });
+  return content;
+}
 
-console.log(`✅ Written to ${filePath}`);
+// 💾 Write to Obsidian
+async function saveToObsidian() {
+  try {
+    const auth = await authorize();
+    const transactions = await fetchSheetData(auth);
+    const markdown = toMarkdown(transactions);
+
+    fs.mkdirSync(vaultPath, { recursive: true });
+    fs.writeFileSync(filePath, markdown);
+
+    console.log(`✅ Saved to: ${filePath}`);
+  } catch (err) {
+    console.error('❌ Error:', err.message);
+  }
+}
+
+saveToObsidian();
