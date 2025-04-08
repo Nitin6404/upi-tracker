@@ -82,9 +82,6 @@ async function saveToObsidian() {
     fs.writeFileSync(filePath, markdown);
 
     console.log(`✅ Saved today's transactions to: ${filePath}`);
-
-    // Ask for manual note after saving transactions
-    await appendManualNotes();
   } catch (err) {
     console.error('❌ Error:', err.message);
   }
