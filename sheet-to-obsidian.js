@@ -3,6 +3,7 @@
 const fs = require('fs');
 const path = require('path');
 const dayjs = require('dayjs');
+const readline = require('readline');
 const { google } = require('googleapis');
 const dotenv = require('dotenv');
 dotenv.config();
@@ -24,14 +25,24 @@ async function authorize() {
   return await auth.getClient();
 }
 
-// 📤 Fetch Data from Google Sheets
+// 📤 Fetch Data from Google Sheets (Only today’s rows)
 async function fetchSheetData(authClient) {
   const sheets = google.sheets({ version: 'v4', auth: authClient });
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: SHEET_ID,
     range: SHEET_RANGE,
   });
-  return res.data.values || [];
+
+  const rows = res.data.values || [];
+
+  // Only fetch today's transactions (date format: YYYY-MM-DD)
+  const today = dayjs().format('YYYY-MM-DD');
+  const todayTransactions = rows.filter(([datetime]) => {
+    const rowDate = dayjs(datetime).format('YYYY-MM-DD');
+    return rowDate === today;
+  });
+
+  return todayTransactions;
 }
 
 // 📝 Generate Markdown
@@ -44,17 +55,36 @@ function toMarkdown(transactions) {
   return content;
 }
 
+// ✍️ Append Manual Notes
+async function appendManualNotes() {
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+
+  rl.question('Add a note (e.g., Reason for spending): ', (note) => {
+    const markdownNote = `\n\n### ${dayjs().format('HH:mm')} - Manual Note: ${note}\n`;
+    fs.appendFileSync(filePath, markdownNote);
+    console.log('✅ Manual note added!');
+    rl.close();
+  });
+}
+
 // 💾 Write to Obsidian
 async function saveToObsidian() {
   try {
     const auth = await authorize();
     const transactions = await fetchSheetData(auth);
     const markdown = toMarkdown(transactions);
-    
+
+    // Create or overwrite the file
     fs.mkdirSync(vaultPath, { recursive: true });
     fs.writeFileSync(filePath, markdown);
 
-    console.log(`✅ Saved to: ${filePath}`);
+    console.log(`✅ Saved today's transactions to: ${filePath}`);
+
+    // Ask for manual note after saving transactions
+    await appendManualNotes();
   } catch (err) {
     console.error('❌ Error:', err.message);
   }
